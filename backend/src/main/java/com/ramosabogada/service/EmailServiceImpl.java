@@ -2,35 +2,50 @@ package com.ramosabogada.service;
 
 import com.ramosabogada.dto.ContactRequest;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
-import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.Map;
 
 @Service
 public class EmailServiceImpl implements EmailService {
 
-    private final JavaMailSender mailSender;
+    private static final String RESEND_API_URL = "https://api.resend.com/emails";
+
+    private final RestTemplate restTemplate;
     private final String recipientEmail;
     private final String senderEmail;
+    private final String resendApiKey;
 
     public EmailServiceImpl(
-        JavaMailSender mailSender,
+        RestTemplate restTemplate,
         @Value("${mail.recipient}") String recipientEmail,
-        @Value("${spring.mail.username}") String senderEmail
+        @Value("${resend.from-email}") String senderEmail,
+        @Value("${resend.api-key}") String resendApiKey
     ) {
-        this.mailSender = mailSender;
+        this.restTemplate = restTemplate;
         this.recipientEmail = recipientEmail;
         this.senderEmail = senderEmail;
+        this.resendApiKey = resendApiKey;
     }
 
     @Override
     public void sendContactEmail(ContactRequest request) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(senderEmail);
-        message.setTo(recipientEmail);
-        message.setSubject("Consulta desde ramosabogada.github.io");
-        message.setText(buildEmailBody(request));
-        mailSender.send(message);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(resendApiKey);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        Map<String, Object> body = Map.of(
+            "from", senderEmail,
+            "to", recipientEmail,
+            "subject", "Consulta desde ramosabogada.github.io",
+            "text", buildEmailBody(request)
+        );
+
+        restTemplate.postForEntity(RESEND_API_URL, new HttpEntity<>(body, headers), String.class);
     }
 
     private String buildEmailBody(ContactRequest request) {
